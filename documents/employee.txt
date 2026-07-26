@@ -1,0 +1,13 @@
+Name: Vikram
+
+Role: AI Engineer
+
+Experience: 6+ Years
+
+Skills:
+Python
+Azure
+LangChain
+Deep Agents
+Docker
+Kubernetes
