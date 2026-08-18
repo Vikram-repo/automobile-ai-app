@@ -42,7 +42,7 @@ stages:
                 trivy image \
                 --severity HIGH,CRITICAL \
                 --exit-code 1 \
-                 automobile-ai-agent:$(imageTag)
+                '***/automobile-ai-agent:$(imageTag)'
             displayName: 'Trivy image security scan'
 
           - task: Docker@2
