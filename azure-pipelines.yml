@@ -1,8 +1,70 @@
-trigger: none
+# trigger: none
+# pr:
+#  branches:
+#    include:
+#      - main
+# pool: z_automobile_app
+
+# variables:
+#   pythonVersion: '3.12'
+#   imageRepository: 'automobile-ai-agent'
+#   imageTag: '$(Build.BuildId)'
+#   dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
+
+# stages:
+#   - stage: CI 
+#     displayName: Build, Test and Scan
+#     jobs:
+#       - job:
+#         steps:
+#           - script: |
+#               python3 --version
+#               python3 -m venv .venv
+#               .venv/bin/python -m pip install --upgrade pip
+#               .venv/bin/pip install -r requirements.txt
+#             displayName: Create venv and install dependencie
+# # add test but for now we will skip test like unit test, api intigration test,agent intigration test
+#           - task: Docker@2
+#             inputs:
+#               containerRegistry: 'ado-acr'
+#               repository: '$(imageRepository)'
+#               command: 'build'
+#               Dockerfile: '$(dockerfilePath)'
+#               tags: '$(imageTag)'
+#           - script: |
+#               echo "Docker images on agent:"
+#               docker images
+#             displayName: 'Verify Docker image'
+#           # - task: Bash@3
+#           #   inputs:
+#           #     targetType: 'inline'
+#           #     script: |
+#           #       trivy image \
+#           #       --severity HIGH,CRITICAL \
+#           #       --exit-code 1 \
+#           #       '$(imageRepository):$(imageTag)'
+#           #   displayName: 'Trivy image security scan'
+
+#           - task: Docker@2
+#             displayName: 'Push image to ACR'
+#             inputs:
+#               containerRegistry: 'ado-acr'
+#               repository: '$(imageRepository)'
+#               command: 'buildAndPush'
+#               Dockerfile: '**/Dockerfile'
+#               tags: '$(imageTag)'
+
+
+trigger:
+  branches:
+    include:
+      - main
+
 pr:
- branches:
-   include:
-     - main
+  branches:
+    include:
+      - main
+
 pool: z_automobile_app
 
 variables:
@@ -12,44 +74,213 @@ variables:
   dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
 
 stages:
-  - stage: CI 
-    displayName: Build, Test and Scan
-    jobs:
-      - job:
-        steps:
-          - script: |
-              python3 --version
-              python3 -m venv .venv
-              .venv/bin/python -m pip install --upgrade pip
-              .venv/bin/pip install -r requirements.txt
-            displayName: Create venv and install dependencie
-# add test but for now we will skip test like unit test, api intigration test,agent intigration test
-          - task: Docker@2
-            inputs:
-              containerRegistry: 'ado-acr'
-              repository: '$(imageRepository)'
-              command: 'build'
-              Dockerfile: '$(dockerfilePath)'
-              tags: '$(imageTag)'
-          - script: |
-              echo "Docker images on agent:"
-              docker images
-            displayName: 'Verify Docker image'
-          # - task: Bash@3
-          #   inputs:
-          #     targetType: 'inline'
-          #     script: |
-          #       trivy image \
-          #       --severity HIGH,CRITICAL \
-          #       --exit-code 1 \
-          #       '$(imageRepository):$(imageTag)'
-          #   displayName: 'Trivy image security scan'
 
-          - task: Docker@2
-            displayName: 'Push image to ACR'
-            inputs:
-              containerRegistry: 'ado-acr'
-              repository: '$(imageRepository)'
-              command: 'buildAndPush'
-              Dockerfile: '**/Dockerfile'
-              tags: '$(imageTag)'
+# ============================================================
+# CI
+# ============================================================
+
+- stage: CI
+  displayName: 'CI - Build, Test and Push'
+
+  jobs:
+
+  - job: Build
+    displayName: 'Build, Test and Push'
+
+    steps:
+
+    # --------------------------------------------------------
+    # Python setup
+    # --------------------------------------------------------
+
+    - script: |
+        python3 --version
+        python3 -m venv .venv
+        .venv/bin/python -m pip install --upgrade pip
+        .venv/bin/pip install -r requirements.txt
+      displayName: 'Create venv and install dependencies'
+
+
+    # --------------------------------------------------------
+    # Tests
+    # --------------------------------------------------------
+
+    # Tests intentionally skipped for now
+    # Unit tests
+    # API integration tests
+    # Agent integration tests
+
+
+    # --------------------------------------------------------
+    # Docker Build
+    # --------------------------------------------------------
+
+    - task: Docker@2
+      displayName: 'Build Docker image'
+
+      inputs:
+        containerRegistry: 'ado-acr'
+        repository: '$(imageRepository)'
+        command: 'build'
+        Dockerfile: '$(dockerfilePath)'
+        tags: |
+          $(imageTag)
+
+
+    # --------------------------------------------------------
+    # Verify image
+    # --------------------------------------------------------
+
+    - script: |
+        echo "Docker images on agent:"
+        docker images
+
+        echo "Verifying image:"
+        docker image inspect $(imageRepository):$(imageTag)
+
+      displayName: 'Verify Docker image'
+
+
+    # --------------------------------------------------------
+    # Trivy
+    # --------------------------------------------------------
+
+    # Temporarily skipped
+
+
+    # --------------------------------------------------------
+    # Push image to ACR
+    # --------------------------------------------------------
+
+    - task: Docker@2
+      displayName: 'Push image to ACR'
+
+      inputs:
+        containerRegistry: 'ado-acr'
+        repository: '$(imageRepository)'
+        command: 'buildAndPush'
+        Dockerfile: '$(dockerfilePath)'
+        tags: |
+          $(imageTag)
+
+
+# ============================================================
+# CD
+# ============================================================
+
+- stage: CD
+  displayName: 'CD - Deploy to AKS'
+
+  dependsOn: CI
+
+  condition: succeeded()
+
+  jobs:
+
+  - deployment: DeployToAKS
+    displayName: 'Deploy to AKS'
+
+    environment: 'automobile-ai-dev'
+
+    pool: z_automobile_app
+
+    strategy:
+      runOnce:
+
+        deploy:
+
+          steps:
+
+          # --------------------------------------------------
+          # Checkout repository
+          # --------------------------------------------------
+
+          - checkout: self
+            displayName: 'Checkout Kubernetes manifests'
+
+
+          # --------------------------------------------------
+          # Verify kubectl
+          # --------------------------------------------------
+
+          - script: |
+              kubectl version --client
+              kubectl get nodes
+            displayName: 'Verify AKS access'
+
+
+          # --------------------------------------------------
+          # Update image tag
+          # --------------------------------------------------
+
+          - script: |
+
+              echo "Build ID: $(Build.BuildId)"
+              echo "Image tag: $(imageTag)"
+
+              sed -i \
+                "s|image: .*automobile-ai-agent:.*|image: zautomoilesappregisty.azurecr.io/automobile-ai-agent:$(imageTag)|" \
+                k8s/deployment.yaml
+
+              echo "Updated deployment:"
+              grep "image:" k8s/deployment.yaml
+
+            displayName: 'Update image tag'
+
+
+          # --------------------------------------------------
+          # Deploy ServiceAccount
+          # --------------------------------------------------
+
+          - script: |
+              kubectl apply -f k8s/serviceaccount.yaml
+
+            displayName: 'Deploy ServiceAccount'
+
+
+          # --------------------------------------------------
+          # Deploy Key Vault SecretProviderClass
+          # --------------------------------------------------
+
+          - script: |
+              kubectl apply -f k8s/secret-provider-class.yaml
+
+            displayName: 'Deploy Key Vault configuration'
+
+
+          # --------------------------------------------------
+          # Deploy Application
+          # --------------------------------------------------
+
+          - script: |
+              kubectl apply -f k8s/deployment.yaml
+
+            displayName: 'Deploy application'
+
+
+          # --------------------------------------------------
+          # Verify deployment
+          # --------------------------------------------------
+
+          - script: |
+              kubectl rollout status \
+                deployment/automobile-ai-agent \
+                -n automobile-ai \
+                --timeout=300s
+
+            displayName: 'Wait for deployment rollout'
+
+
+          # --------------------------------------------------
+          # Verify pods
+          # --------------------------------------------------
+
+          - script: |
+              echo "Pods:"
+              kubectl get pods -n automobile-ai -o wide
+
+              echo ""
+              echo "Deployment:"
+              kubectl get deployment automobile-ai-agent -n automobile-ai
+
+            displayName: 'Verify application'
