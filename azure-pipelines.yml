@@ -55,10 +55,8 @@
 #               tags: '$(imageTag)'
 
 
-trigger:
-  branches:
-    include:
-      - main
+
+trigger: none
 
 pr:
   branches:
@@ -80,7 +78,7 @@ stages:
 # ============================================================
 
 - stage: CI
-  displayName: 'CI - Build, Test and Push'
+  displayName: 'CI - Build, Test and Scan'
 
   jobs:
 
@@ -90,7 +88,7 @@ stages:
     steps:
 
     # --------------------------------------------------------
-    # Python setup
+    # Python dependencies
     # --------------------------------------------------------
 
     - script: |
@@ -105,10 +103,10 @@ stages:
     # Tests
     # --------------------------------------------------------
 
-    # Tests intentionally skipped for now
-    # Unit tests
-    # API integration tests
-    # Agent integration tests
+    # TODO:
+    # - Unit tests
+    # - API integration tests
+    # - Agent integration tests
 
 
     # --------------------------------------------------------
@@ -117,7 +115,6 @@ stages:
 
     - task: Docker@2
       displayName: 'Build Docker image'
-
       inputs:
         containerRegistry: 'ado-acr'
         repository: '$(imageRepository)'
@@ -128,24 +125,35 @@ stages:
 
 
     # --------------------------------------------------------
-    # Verify image
+    # Verify Docker image
     # --------------------------------------------------------
 
     - script: |
         echo "Docker images on agent:"
         docker images
 
-        echo "Verifying image:"
+        echo ""
+        echo "Verifying built image:"
         docker image inspect $(imageRepository):$(imageTag)
 
       displayName: 'Verify Docker image'
 
 
     # --------------------------------------------------------
-    # Trivy
+    # Trivy Image Security Scan
     # --------------------------------------------------------
 
     # Temporarily skipped
+
+    # - task: Bash@3
+    #   displayName: 'Trivy image security scan'
+    #   inputs:
+    #     targetType: 'inline'
+    #     script: |
+    #       trivy image \
+    #         --severity HIGH,CRITICAL \
+    #         --exit-code 1 \
+    #         $(imageRepository):$(imageTag)
 
 
     # --------------------------------------------------------
@@ -154,12 +162,10 @@ stages:
 
     - task: Docker@2
       displayName: 'Push image to ACR'
-
       inputs:
         containerRegistry: 'ado-acr'
         repository: '$(imageRepository)'
-        command: 'buildAndPush'
-        Dockerfile: '$(dockerfilePath)'
+        command: 'push'
         tags: |
           $(imageTag)
 
@@ -172,7 +178,6 @@ stages:
   displayName: 'CD - Deploy to AKS'
 
   dependsOn: CI
-
   condition: succeeded()
 
   jobs:
@@ -200,7 +205,7 @@ stages:
 
 
           # --------------------------------------------------
-          # Verify kubectl
+          # Verify AKS access
           # --------------------------------------------------
 
           - script: |
@@ -214,7 +219,6 @@ stages:
           # --------------------------------------------------
 
           - script: |
-
               echo "Build ID: $(Build.BuildId)"
               echo "Image tag: $(imageTag)"
 
@@ -222,7 +226,8 @@ stages:
                 "s|image: .*automobile-ai-agent:.*|image: zautomoilesappregisty.azurecr.io/automobile-ai-agent:$(imageTag)|" \
                 k8s/deployment.yaml
 
-              echo "Updated deployment:"
+              echo ""
+              echo "Updated deployment image:"
               grep "image:" k8s/deployment.yaml
 
             displayName: 'Update image tag'
@@ -259,7 +264,7 @@ stages:
 
 
           # --------------------------------------------------
-          # Verify deployment
+          # Wait for rollout
           # --------------------------------------------------
 
           - script: |
@@ -272,15 +277,23 @@ stages:
 
 
           # --------------------------------------------------
-          # Verify pods
+          # Verify deployment
           # --------------------------------------------------
 
           - script: |
               echo "Pods:"
-              kubectl get pods -n automobile-ai -o wide
+              kubectl get pods \
+                -n automobile-ai \
+                -o wide
 
               echo ""
               echo "Deployment:"
-              kubectl get deployment automobile-ai-agent -n automobile-ai
+              kubectl get deployment automobile-ai-agent \
+                -n automobile-ai
+
+              echo ""
+              echo "Service:"
+              kubectl get service \
+                -n automobile-ai
 
             displayName: 'Verify application'
