@@ -1,0 +1,52 @@
+trigger: none
+pr:
+ branches:
+   include:
+     - main
+pool: z_automobile_app
+
+variables:
+  pythonVersion: '3.12'
+  imageRepository: 'automobile-ai-agent'
+  imageTag: '$(Build.BuildId)'
+  dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
+
+stages:
+  - stage: CI 
+    displayName: Build, Test and Scan
+    jobs:
+      - job:
+        steps:
+          - task: PythonScript@0
+            inputs:
+              scriptSource: 'inline'
+              script: |
+                python -m pip install --upgrade pip
+                pip install -r requirements.txt
+# add test but for now we will skip test like unit test, api intigration test,agent intigration test
+          - task: Docker@2
+            inputs:
+              containerRegistry: 'ado-acr'
+              repository: '$(imageRepository)'
+              command: 'build'
+              Dockerfile: '$(dockerfilePath)'
+              tags: '$(imageTag)'
+          - task: Bash@3
+            inputs:
+              targetType: 'inline'
+              script: |
+                trivy image \
+                --severity HIGH,CRITICAL \
+                --exit-code 1 \
+                $(imageRepository):$(imageTag)
+            displayName: 'Trivy image security scan'
+
+          - task: Docker@2
+            displayName: 'Push image to ACR'
+            inputs:
+              command: buildAndPush
+              repository: '$(imageRepository)'
+              dockerfile: '$(dockerfilePath)'
+              containerRegistry: 'sc-acr-automobile'
+              tags: |
+                $(imageTag)
