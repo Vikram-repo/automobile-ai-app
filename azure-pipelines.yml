@@ -131,11 +131,6 @@ stages:
     - script: |
         echo "Docker images on agent:"
         docker images
-
-        echo ""
-        echo "Verifying built image:"
-        docker image inspect $(imageRepository):$(imageTag)
-
       displayName: 'Verify Docker image'
 
 
