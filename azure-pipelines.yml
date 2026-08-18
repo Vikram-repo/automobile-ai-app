@@ -31,6 +31,10 @@ stages:
               command: 'build'
               Dockerfile: '$(dockerfilePath)'
               tags: '$(imageTag)'
+          - script: |
+              echo "Docker images on agent:"
+              docker images
+            displayName: 'Verify Docker image'
           - task: Bash@3
             inputs:
               targetType: 'inline'
