@@ -262,13 +262,13 @@ stages:
           # Wait for rollout
           # --------------------------------------------------
 
-          - script: |
-              kubectl rollout status \
-                deployment/automobile-ai-agent \
-                -n automobile-ai \
-                --timeout=300s
+          # - script: |
+          #     kubectl rollout status \
+          #       deployment/automobile-ai-agent \
+          #       -n automobile-ai \
+          #       --timeout=300s
 
-            displayName: 'Wait for deployment rollout'
+          #   displayName: 'Wait for deployment rollout'
 
 
           # --------------------------------------------------
