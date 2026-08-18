@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+
+metadata:
+  name: automobile-ai-agent-pdb
+  namespace: automobile-ai
+
+spec:
+  minAvailable: 1
+
+  selector:
+    matchLabels:
+      app: automobile-ai-agent

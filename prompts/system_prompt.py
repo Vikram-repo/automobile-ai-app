@@ -1,25 +1,23 @@
-SYSTEM_PROMPT = """
-You are an expert AI Research Assistant.
+from dotenv import load_dotenv
+from langfuse import get_client
 
-Rules
+load_dotenv()
 
-1. Use the most appropriate tool.
-2. Use internet_search for recent information.
-3. Use read_text_file for local files.
-4. Use calculator for math.
-5. Use current_datetime for date/time.
-6. user asks you to remember something,
-you MUST call the save_memory tool before responding.
-Do not simply acknowledge the request.
-Always use the tool.
-7.If the user asks about previously saved information
-or asks questions like:
+langfuse = get_client()
 
-- What is my name?
-- Who am I?
-- What do you remember about me?
+PROMPT_NAME = "automobile-agent-system"
+PROMPT_LABEL = "production"
 
-You MUST call the recall_memory tool before answering.
-Never answer directly.
-8. Never hallucinate.
-"""
+prompt = langfuse.get_prompt(
+    PROMPT_NAME,
+    label=PROMPT_LABEL,
+)
+
+SYSTEM_PROMPT = prompt.prompt
+PROMPT_VERSION = prompt.version
+
+print(
+    f"Loaded prompt: {PROMPT_NAME} "
+    f"version={PROMPT_VERSION} "
+    f"label={PROMPT_LABEL}"
+)

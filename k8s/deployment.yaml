@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: automobile-ai-agent
+  namespace: automobile-ai
+  labels:
+    app: automobile-ai-agent
+
+spec:
+  replicas: 2
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      app: automobile-ai-agent
+
+  template:
+    metadata:
+      labels:
+        app: automobile-ai-agent
+
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: automobile-ai-agent
+
+          image: zautomoilesappregisty.azurecr.io/automobile-ai-agent:1.0.4
+          imagePullPolicy: IfNotPresent
+
+          # Load application configuration from Kubernetes Secret
+          envFrom:
+            - secretRef:
+                name: automobile-ai-secrets
+
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          terminationMessagePolicy: File
