@@ -44,9 +44,8 @@ stages:
           - task: Docker@2
             displayName: 'Push image to ACR'
             inputs:
-              command: buildAndPush
+              containerRegistry: 'ado-acr'
               repository: '$(imageRepository)'
-              dockerfile: '$(dockerfilePath)'
-              containerRegistry: 'sc-acr-automobile'
-              tags: |
-                $(imageTag)
+              command: 'buildAndPush'
+              Dockerfile: '**/Dockerfile'
+              tags: '$(imageTag)'
