@@ -17,12 +17,12 @@ stages:
     jobs:
       - job:
         steps:
-          - task: Bash@3
-            inputs:
-              targetType: 'inline'
-              script: |
-                python -m pip install --upgrade pip
-                pip install -r requirements.txt
+          - script: |
+              python3 --version
+              python3 -m venv .venv
+              .venv/bin/python -m pip install --upgrade pip
+              .venv/bin/pip install -r requirements.txt
+            displayName: Create venv and install dependencie
 # add test but for now we will skip test like unit test, api intigration test,agent intigration test
           - task: Docker@2
             inputs:
