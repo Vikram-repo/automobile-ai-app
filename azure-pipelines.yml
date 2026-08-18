@@ -27,7 +27,7 @@ stages:
           - task: Docker@2
             inputs:
               containerRegistry: 'ado-acr'
-              repository: '$(imageRepository)'
+              repository: 'automobile-ai-agent'
               command: 'build'
               Dockerfile: '$(dockerfilePath)'
               tags: '$(imageTag)'
@@ -42,14 +42,14 @@ stages:
                 trivy image \
                 --severity HIGH,CRITICAL \
                 --exit-code 1 \
-                $(imageRepository):$(imageTag)
+                 automobile-ai-agent:$(imageTag)
             displayName: 'Trivy image security scan'
 
           - task: Docker@2
             displayName: 'Push image to ACR'
             inputs:
               containerRegistry: 'ado-acr'
-              repository: '$(imageRepository)'
+              repository: 'automobile-ai-agent'
               command: 'buildAndPush'
               Dockerfile: '**/Dockerfile'
               tags: '$(imageTag)'
