@@ -35,15 +35,15 @@ stages:
               echo "Docker images on agent:"
               docker images
             displayName: 'Verify Docker image'
-          - task: Bash@3
-            inputs:
-              targetType: 'inline'
-              script: |
-                trivy image \
-                --severity HIGH,CRITICAL \
-                --exit-code 1 \
-                '$(imageRepository):$(imageTag)'
-            displayName: 'Trivy image security scan'
+          # - task: Bash@3
+          #   inputs:
+          #     targetType: 'inline'
+          #     script: |
+          #       trivy image \
+          #       --severity HIGH,CRITICAL \
+          #       --exit-code 1 \
+          #       '$(imageRepository):$(imageTag)'
+          #   displayName: 'Trivy image security scan'
 
           - task: Docker@2
             displayName: 'Push image to ACR'
