@@ -447,7 +447,7 @@ stages:
               kubectl argo rollouts status \
                 automobile-ai-agent \
                 -n automobile-ai \
-                --timeout 300
+                --timeout 300s
 
               echo ""
 
