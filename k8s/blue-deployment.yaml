@@ -1,119 +1,119 @@
-# 
+# # 
 
-apiVersion: apps/v1
-kind: Deployment
+# apiVersion: apps/v1
+# kind: Deployment
 
-metadata:
-  name: automobile-ai-agent-blue
-  namespace: automobile-ai
+# metadata:
+#   name: automobile-ai-agent-blue
+#   namespace: automobile-ai
 
-  labels:
-    app: automobile-ai-agent
-    version: blue
+#   labels:
+#     app: automobile-ai-agent
+#     version: blue
 
-spec:
-  replicas: 2
+# spec:
+#   replicas: 2
 
-  strategy:
-    type: RollingUpdate
+#   strategy:
+#     type: RollingUpdate
 
-    rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
+#     rollingUpdate:
+#       maxUnavailable: 0
+#       maxSurge: 1
 
-  selector:
-    matchLabels:
-      app: automobile-ai-agent
-      version: blue
+#   selector:
+#     matchLabels:
+#       app: automobile-ai-agent
+#       version: blue
 
-  template:
+#   template:
 
-    metadata:
-      labels:
-        app: automobile-ai-agent
-        azure.workload.identity/use: "true"
+#     metadata:
+#       labels:
+#         app: automobile-ai-agent
+#         azure.workload.identity/use: "true"
 
-    spec:
+#     spec:
 
-      # Azure Workload Identity
-      serviceAccountName: automobile-agent-sa
+#       # Azure Workload Identity
+#       serviceAccountName: automobile-agent-sa
 
-      securityContext:
-        seccompProfile:
-          type: RuntimeDefault
+#       securityContext:
+#         seccompProfile:
+#           type: RuntimeDefault
 
-      containers:
+#       containers:
 
-        - name: automobile-ai-agent
+#         - name: automobile-ai-agent
 
-          image: zautomoilesappregisty.azurecr.io/automobile-ai-agent:1.0.4
+#           image: zautomoilesappregisty.azurecr.io/automobile-ai-agent:1.0.4
 
-          imagePullPolicy: IfNotPresent
+#           imagePullPolicy: IfNotPresent
 
-          # Secrets synced from Azure Key Vault
-          envFrom:
-            - secretRef:
-                name: automobile-ai-secrets
+#           # Secrets synced from Azure Key Vault
+#           envFrom:
+#             - secretRef:
+#                 name: automobile-ai-secrets
 
-          ports:
-            - containerPort: 8000
-              protocol: TCP
+#           ports:
+#             - containerPort: 8000
+#               protocol: TCP
 
-          resources:
+#           resources:
 
-            requests:
-              cpu: "250m"
-              memory: "512Mi"
+#             requests:
+#               cpu: "250m"
+#               memory: "512Mi"
 
-            limits:
-              cpu: "1000m"
-              memory: "1Gi"
+#             limits:
+#               cpu: "1000m"
+#               memory: "1Gi"
 
-          securityContext:
-            allowPrivilegeEscalation: false
+#           securityContext:
+#             allowPrivilegeEscalation: false
 
-            capabilities:
-              drop:
-                - ALL
+#             capabilities:
+#               drop:
+#                 - ALL
 
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 8000
+#           readinessProbe:
+#             httpGet:
+#               path: /
+#               port: 8000
 
-            initialDelaySeconds: 20
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
+#             initialDelaySeconds: 20
+#             periodSeconds: 10
+#             timeoutSeconds: 5
+#             failureThreshold: 3
 
-          livenessProbe:
-            httpGet:
-              path: /
-              port: 8000
+#           livenessProbe:
+#             httpGet:
+#               path: /
+#               port: 8000
 
-            initialDelaySeconds: 30
-            periodSeconds: 20
-            timeoutSeconds: 5
-            failureThreshold: 3
+#             initialDelaySeconds: 30
+#             periodSeconds: 20
+#             timeoutSeconds: 5
+#             failureThreshold: 3
 
-          terminationMessagePolicy: File
+#           terminationMessagePolicy: File
 
-          # Mount CSI secrets volume
-          volumeMounts:
+#           # Mount CSI secrets volume
+#           volumeMounts:
 
-            - name: secrets-store
-              mountPath: /mnt/secrets-store
-              readOnly: true
+#             - name: secrets-store
+#               mountPath: /mnt/secrets-store
+#               readOnly: true
 
-      # Azure Key Vault CSI volume
-      volumes:
+#       # Azure Key Vault CSI volume
+#       volumes:
 
-        - name: secrets-store
+#         - name: secrets-store
 
-          csi:
-            driver: secrets-store.csi.k8s.io
+#           csi:
+#             driver: secrets-store.csi.k8s.io
 
-            readOnly: true
+#             readOnly: true
 
-            volumeAttributes:
-              secretProviderClass: automobile-agent-secrets
+#             volumeAttributes:
+#               secretProviderClass: automobile-agent-secrets
