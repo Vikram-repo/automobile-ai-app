@@ -77,92 +77,92 @@ stages:
 # CI
 # ============================================================
 
-- stage: CI
-  displayName: 'CI - Build, Test and Scan'
+# - stage: CI
+#   displayName: 'CI - Build, Test and Scan'
 
-  jobs:
+#   jobs:
 
-  - job: Build
-    displayName: 'Build, Test and Push'
+#   - job: Build
+#     displayName: 'Build, Test and Push'
 
-    steps:
+#     steps:
 
-    # --------------------------------------------------------
-    # Python dependencies
-    # --------------------------------------------------------
+#     # --------------------------------------------------------
+#     # Python dependencies
+#     # --------------------------------------------------------
 
-    - script: |
-        python3 --version
-        python3 -m venv .venv
-        .venv/bin/python -m pip install --upgrade pip
-        .venv/bin/pip install -r requirements.txt
-      displayName: 'Create venv and install dependencies'
-
-
-    # --------------------------------------------------------
-    # Tests
-    # --------------------------------------------------------
-
-    # TODO:
-    # - Unit tests
-    # - API integration tests
-    # - Agent integration tests
+#     - script: |
+#         python3 --version
+#         python3 -m venv .venv
+#         .venv/bin/python -m pip install --upgrade pip
+#         .venv/bin/pip install -r requirements.txt
+#       displayName: 'Create venv and install dependencies'
 
 
-    # --------------------------------------------------------
-    # Docker Build
-    # --------------------------------------------------------
+#     # --------------------------------------------------------
+#     # Tests
+#     # --------------------------------------------------------
 
-    - task: Docker@2
-      displayName: 'Build Docker image'
-      inputs:
-        containerRegistry: 'ado-acr'
-        repository: '$(imageRepository)'
-        command: 'build'
-        Dockerfile: '$(dockerfilePath)'
-        tags: |
-          $(imageTag)
+#     # TODO:
+#     # - Unit tests
+#     # - API integration tests
+#     # - Agent integration tests
 
 
-    # --------------------------------------------------------
-    # Verify Docker image
-    # --------------------------------------------------------
+#     # --------------------------------------------------------
+#     # Docker Build
+#     # --------------------------------------------------------
 
-    - script: |
-        echo "Docker images on agent:"
-        docker images
-      displayName: 'Verify Docker image'
-
-
-    # --------------------------------------------------------
-    # Trivy Image Security Scan
-    # --------------------------------------------------------
-
-    # Temporarily skipped
-
-    # - task: Bash@3
-    #   displayName: 'Trivy image security scan'
-    #   inputs:
-    #     targetType: 'inline'
-    #     script: |
-    #       trivy image \
-    #         --severity HIGH,CRITICAL \
-    #         --exit-code 1 \
-    #         $(imageRepository):$(imageTag)
+#     - task: Docker@2
+#       displayName: 'Build Docker image'
+#       inputs:
+#         containerRegistry: 'ado-acr'
+#         repository: '$(imageRepository)'
+#         command: 'build'
+#         Dockerfile: '$(dockerfilePath)'
+#         tags: |
+#           $(imageTag)
 
 
-    # --------------------------------------------------------
-    # Push image to ACR
-    # --------------------------------------------------------
+#     # --------------------------------------------------------
+#     # Verify Docker image
+#     # --------------------------------------------------------
 
-    - task: Docker@2
-      displayName: 'Push image to ACR'
-      inputs:
-        containerRegistry: 'ado-acr'
-        repository: '$(imageRepository)'
-        command: 'push'
-        tags: |
-          $(imageTag)
+#     - script: |
+#         echo "Docker images on agent:"
+#         docker images
+#       displayName: 'Verify Docker image'
+
+
+#     # --------------------------------------------------------
+#     # Trivy Image Security Scan
+#     # --------------------------------------------------------
+
+#     # Temporarily skipped
+
+#     # - task: Bash@3
+#     #   displayName: 'Trivy image security scan'
+#     #   inputs:
+#     #     targetType: 'inline'
+#     #     script: |
+#     #       trivy image \
+#     #         --severity HIGH,CRITICAL \
+#     #         --exit-code 1 \
+#     #         $(imageRepository):$(imageTag)
+
+
+#     # --------------------------------------------------------
+#     # Push image to ACR
+#     # --------------------------------------------------------
+
+#     - task: Docker@2
+#       displayName: 'Push image to ACR'
+#       inputs:
+#         containerRegistry: 'ado-acr'
+#         repository: '$(imageRepository)'
+#         command: 'push'
+#         tags: |
+#           $(imageTag)
 
 
 # # ============================================================
@@ -283,8 +283,6 @@ stages:
 - stage: CD
 
   displayName: 'CD - Argo Rollouts Blue Green'
-
-  dependsOn: CI
 
   condition: succeeded()
 
@@ -481,10 +479,9 @@ stages:
 
             displayName: 'Verify Blue Green state'
 
-
-          # --------------------------------------------------
-          # Preview smoke test
-          # --------------------------------------------------
+# --------------------------------------------------
+# Preview smoke test
+# --------------------------------------------------
 
           - script: |
 
@@ -494,12 +491,12 @@ stages:
 
               kubectl run automobile-ai-preview-test \
                 -n automobile-ai \
-                --rm \
                 --restart=Never \
                 --image=curlimages/curl:8.10.1 \
                 --command \
                 -- sh -c '
                   for i in $(seq 1 10); do
+
                     echo "Attempt $i"
 
                     if curl \
@@ -515,30 +512,29 @@ stages:
                     fi
 
                     sleep 3
+
                   done
 
                   echo "Preview smoke test FAILED"
                   exit 1
                 '
 
+              echo "Waiting for smoke-test pod..."
+
+              kubectl wait \
+                --for=jsonpath='{.status.phase}'=Succeeded \
+                pod/automobile-ai-preview-test \
+                -n automobile-ai \
+                --timeout=120s
+
+              echo "Preview smoke test completed successfully."
+
+              kubectl delete pod \
+                automobile-ai-preview-test \
+                -n automobile-ai \
+                --ignore-not-found=true
+
             displayName: 'Smoke test Preview'
-
-
-          # --------------------------------------------------
-          # Promote
-          # --------------------------------------------------
-
-          - script: |
-
-              set -e
-
-              echo "Promoting Preview to Active..."
-
-              kubectl argo rollouts promote \
-                automobile-ai-agent \
-                -n automobile-ai
-
-            displayName: 'Promote new version'
 
 
           # --------------------------------------------------
