@@ -450,17 +450,50 @@ stages:
 
 
           # ==================================================
-          # Wait for Promotion
-          # ==================================================
+# Verify Promotion
+# ==================================================
 
           - script: |
 
               set -e
 
+              echo "Waiting for rollout to become Healthy..."
+
               kubectl argo rollouts status \
                 automobile-ai-agent \
                 -n automobile-ai \
                 --timeout 300s
+
+              echo ""
+              echo "========== ACTIVE SELECTOR =========="
+
+              ACTIVE_SELECTOR=$(kubectl get rollout \
+                automobile-ai-agent \
+                -n automobile-ai \
+                -o jsonpath='{.status.blueGreen.activeSelector}')
+
+              echo "Active Rollout Selector: $ACTIVE_SELECTOR"
+
+              echo ""
+              echo "========== SERVICE SELECTOR =========="
+
+              SERVICE_SELECTOR=$(kubectl get service \
+                automobile-ai-agent \
+                -n automobile-ai \
+                -o jsonpath='{.spec.selector.rollouts-pod-template-hash}')
+
+              echo "Active Service Selector: $SERVICE_SELECTOR"
+
+              if [ "$ACTIVE_SELECTOR" != "$SERVICE_SELECTOR" ]; then
+
+                echo "ERROR: Active service is not pointing to active rollout."
+
+                exit 1
+
+              fi
+
+              echo ""
+              echo "Active service successfully switched to new version."
 
             displayName: 'Verify Promotion'
 
