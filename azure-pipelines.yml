@@ -402,9 +402,9 @@ stages:
             displayName: 'Deploy new image'
 
 
-          # ==================================================
-          # Verify Preview
-          # ==================================================
+# ============================================================
+# Verify Preview
+# ============================================================
 
           - script: |
 
@@ -418,38 +418,58 @@ stages:
 
               echo ""
 
+              echo "========== ROLLOUT YAML STATUS =========="
+
+              kubectl get rollout \
+                automobile-ai-agent \
+                -n automobile-ai \
+                -o yaml
+
+              echo ""
+
+              echo "========== ALL PODS =========="
+
+              kubectl get pods \
+                -n automobile-ai \
+                -l app=automobile-ai-agent \
+                -o wide
+
+              echo ""
+
               echo "========== PREVIEW SERVICE =========="
 
-              kubectl get service \
+              kubectl get svc \
                 automobile-ai-agent-preview \
-                -n automobile-ai
+                -n automobile-ai \
+                -o yaml
 
               echo ""
 
               echo "========== PREVIEW ENDPOINTS =========="
 
-              ENDPOINTS=$(kubectl get endpoints \
+              kubectl get endpoints \
                 automobile-ai-agent-preview \
                 -n automobile-ai \
-                -o jsonpath='{.subsets[*].addresses[*].ip}')
+                -o wide
 
-              if [ -z "$ENDPOINTS" ]; then
+              echo ""
 
-                echo "ERROR: Preview Service has no endpoints."
+              echo "========== REPLICASETS =========="
 
-                kubectl get pods \
-                  -n automobile-ai \
-                  -l app=automobile-ai-agent \
-                  -o wide
+              kubectl get rs \
+                -n automobile-ai \
+                -l app=automobile-ai-agent \
+                -o wide
 
-                exit 1
+              echo ""
 
-              fi
+              echo "========== ROLLOUT EVENTS =========="
 
-              echo "Preview endpoints: $ENDPOINTS"
+              kubectl describe rollout \
+                automobile-ai-agent \
+                -n automobile-ai
 
-            displayName: 'Verify Preview'
-
+            displayName: 'Debug Preview'
 
           # ==================================================
           # Preview Smoke Test
