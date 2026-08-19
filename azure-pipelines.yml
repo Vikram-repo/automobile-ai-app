@@ -174,7 +174,6 @@ stages:
   displayName: 'CD - Argo Rollouts Blue Green'
 
   # dependsOn: CI
-
   # condition: succeeded()
 
   jobs:
@@ -287,9 +286,9 @@ stages:
             displayName: 'Deploy new image'
 
 
-# ============================================================
-# Verify Preview
-# ============================================================
+          # ==================================================
+          # Verify Preview
+          # ==================================================
 
           - script: |
 
@@ -356,6 +355,7 @@ stages:
 
             displayName: 'Debug Preview'
 
+
           # ==================================================
           # Preview Smoke Test
           # ==================================================
@@ -379,13 +379,20 @@ stages:
                 --image=curlimages/curl:8.10.1 \
                 --command \
                 -- sh -c '
+                  echo "Testing Preview Service..."
+
                   curl \
                     --fail \
                     --silent \
                     --show-error \
                     --max-time 15 \
                     http://automobile-ai-agent-preview:8000/
+
+                  echo ""
+                  echo "Preview smoke test PASSED"
                 '
+
+              echo "Waiting for smoke-test pod..."
 
               if kubectl wait \
                 --for=jsonpath='{.status.phase}'=Succeeded \
@@ -393,24 +400,23 @@ stages:
                 -n "$NAMESPACE" \
                 --timeout=60s; then
 
-                echo "Preview smoke test PASSED"
+                echo "Smoke test succeeded."
+
+                kubectl logs \
+                  "$POD" \
+                  -n "$NAMESPACE"
 
               else
 
-                echo "Preview smoke test FAILED"
+                echo "Smoke test FAILED."
 
                 kubectl get pod "$POD" \
                   -n "$NAMESPACE" \
                   -o wide
 
-                echo ""
+                echo "========== LOGS =========="
 
                 kubectl logs \
-                  "$POD" \
-                  -n "$NAMESPACE" \
-                  || true
-
-                kubectl describe pod \
                   "$POD" \
                   -n "$NAMESPACE" \
                   || true
