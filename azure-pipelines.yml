@@ -321,6 +321,8 @@ stages:
 
           - script: |
 
+              set -e
+
               kubectl version --client
 
               kubectl get nodes
@@ -329,16 +331,25 @@ stages:
 
 
           # --------------------------------------------------
-          # Verify Argo Rollouts Controller
+          # Verify Argo Rollouts
           # --------------------------------------------------
 
           - script: |
 
+              set -e
+
+              echo "Argo Rollouts CRD:"
               kubectl get crd rollouts.argoproj.io
 
+              echo ""
+
+              echo "Argo Rollouts Controller:"
               kubectl get pods \
                 -n argo-rollouts
 
+              echo ""
+
+              echo "Argo Rollouts CLI:"
               kubectl argo rollouts version
 
             displayName: 'Verify Argo Rollouts'
@@ -349,6 +360,8 @@ stages:
           # --------------------------------------------------
 
           - script: |
+
+              set -e
 
               kubectl apply \
                 -f k8s/serviceaccount.yaml
@@ -369,10 +382,12 @@ stages:
 
 
           # --------------------------------------------------
-          # Verify Rollout
+          # Verify Rollout exists
           # --------------------------------------------------
 
           - script: |
+
+              set -e
 
               kubectl get rollout \
                 automobile-ai-agent \
@@ -382,74 +397,76 @@ stages:
 
 
           # --------------------------------------------------
-          # Update Rollout image
+          # Update image
           # --------------------------------------------------
 
           - script: |
 
+              set -e
+
+              IMAGE="zautomoilesappregisty.azurecr.io/automobile-ai-agent:$(imageTag)"
+
               echo "Deploying image:"
-              echo "zautomoilesappregisty.azurecr.io/automobile-ai-agent:$(imageTag)"
+              echo "$IMAGE"
 
               kubectl argo rollouts set image \
                 automobile-ai-agent \
-                automobile-ai-agent=zautomoilesappregisty.azurecr.io/automobile-ai-agent:$(imageTag) \
+                automobile-ai-agent="$IMAGE" \
                 -n automobile-ai
 
             displayName: 'Update Rollout image'
 
 
           # --------------------------------------------------
-          # Wait for Preview
+          # Wait for Preview Pods
           # --------------------------------------------------
 
           - script: |
 
-              kubectl argo rollouts status \
-                automobile-ai-agent \
-                -n automobile-ai \
-                --timeout 300s
+              set -e
 
-            displayName: 'Wait for rollout'
+              echo "Waiting for Preview pods to become Ready..."
+
+              for i in {1..60}; do
+
+                READY=$(kubectl get pods \
+                  -n automobile-ai \
+                  -l app=automobile-ai-agent \
+                  -o jsonpath='{range .items[*]}{.status.containerStatuses[0].ready}{"\n"}{end}' \
+                  2>/dev/null | grep -c '^true$' || true)
+
+                echo "Ready containers: $READY"
+
+                if [ "$READY" -ge 2 ]; then
+                  echo "Preview pods are Ready."
+                  break
+                fi
+
+                sleep 5
+
+              done
+
+              if [ "$READY" -lt 2 ]; then
+
+                echo "Preview pods did not become Ready."
+
+                kubectl get pods \
+                  -n automobile-ai \
+                  -l app=automobile-ai-agent \
+                  -o wide
+
+                exit 1
+
+              fi
+
+            displayName: 'Wait for Preview pods'
 
 
           # --------------------------------------------------
-          # Show Rollout
+          # Show Blue Green state
           # --------------------------------------------------
 
           - script: |
-
-              kubectl argo rollouts get rollout \
-                automobile-ai-agent \
-                -n automobile-ai
-
-            displayName: 'Verify Preview deployment'
-
-
-          # --------------------------------------------------
-          # Promote
-          # --------------------------------------------------
-
-          - script: |
-
-              kubectl argo rollouts promote \
-                automobile-ai-agent \
-                -n automobile-ai
-
-            displayName: 'Promote new version'
-
-
-          # --------------------------------------------------
-          # Final verification
-          # --------------------------------------------------
-
-          - script: |
-
-              kubectl argo rollouts status \
-                automobile-ai-agent \
-                -n automobile-ai \
-                --timeout 300s
-
-              echo ""
 
               kubectl argo rollouts get rollout \
                 automobile-ai-agent \
@@ -462,4 +479,125 @@ stages:
                 -l app=automobile-ai-agent \
                 -o wide
 
-            displayName: 'Final rollout verification'
+            displayName: 'Verify Blue Green state'
+
+
+          # --------------------------------------------------
+          # Preview smoke test
+          # --------------------------------------------------
+
+          - script: |
+
+              set -e
+
+              echo "Running Preview smoke test..."
+
+              kubectl run automobile-ai-preview-test \
+                -n automobile-ai \
+                --rm \
+                --restart=Never \
+                --image=curlimages/curl:8.10.1 \
+                --command \
+                -- sh -c '
+                  for i in $(seq 1 10); do
+                    echo "Attempt $i"
+
+                    if curl \
+                      --fail \
+                      --silent \
+                      --show-error \
+                      --max-time 10 \
+                      http://automobile-ai-agent-preview:8000/; then
+
+                      echo "Preview smoke test PASSED"
+                      exit 0
+
+                    fi
+
+                    sleep 3
+                  done
+
+                  echo "Preview smoke test FAILED"
+                  exit 1
+                '
+
+            displayName: 'Smoke test Preview'
+
+
+          # --------------------------------------------------
+          # Promote
+          # --------------------------------------------------
+
+          - script: |
+
+              set -e
+
+              echo "Promoting Preview to Active..."
+
+              kubectl argo rollouts promote \
+                automobile-ai-agent \
+                -n automobile-ai
+
+            displayName: 'Promote new version'
+
+
+          # --------------------------------------------------
+          # Wait for promotion
+          # --------------------------------------------------
+
+          - script: |
+
+              set -e
+
+              kubectl argo rollouts status \
+                automobile-ai-agent \
+                -n automobile-ai \
+                --timeout 300s
+
+            displayName: 'Wait for promotion completion'
+
+
+          # --------------------------------------------------
+          # Final verification
+          # --------------------------------------------------
+
+          - script: |
+
+              set -e
+
+              echo "========== FINAL ROLLOUT =========="
+
+              kubectl argo rollouts get rollout \
+                automobile-ai-agent \
+                -n automobile-ai
+
+              echo ""
+
+              echo "========== SERVICES =========="
+
+              kubectl get svc \
+                -n automobile-ai
+
+              echo ""
+
+              echo "========== PODS =========="
+
+              kubectl get pods \
+                -n automobile-ai \
+                -l app=automobile-ai-agent \
+                -o wide
+
+              echo ""
+
+              echo "========== ACTIVE SERVICE =========="
+
+              kubectl get service \
+                automobile-ai-agent \
+                -n automobile-ai \
+                -o jsonpath='{.spec.selector}'
+
+              echo ""
+
+              echo "Blue-Green deployment completed successfully."
+
+            displayName: 'Final deployment verification'
