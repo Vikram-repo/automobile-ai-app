@@ -71,32 +71,32 @@ variables:
   imageTag: '$(Build.BuildId)'
   dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
 
-stages:
+
 
 # ============================================================
 # CI
 # ============================================================
+stages:
+- stage: CI
+  displayName: 'CI - Build, Test and Scan'
 
-# - stage: CI
-#   displayName: 'CI - Build, Test and Scan'
+  jobs:
 
-#   jobs:
+  - job: Build
+    displayName: 'Build, Test and Push'
 
-#   - job: Build
-#     displayName: 'Build, Test and Push'
+    steps:
 
-#     steps:
+    # --------------------------------------------------------
+    # Python dependencies
+    # --------------------------------------------------------
 
-#     # --------------------------------------------------------
-#     # Python dependencies
-#     # --------------------------------------------------------
-
-#     - script: |
-#         python3 --version
-#         python3 -m venv .venv
-#         .venv/bin/python -m pip install --upgrade pip
-#         .venv/bin/pip install -r requirements.txt
-#       displayName: 'Create venv and install dependencies'
+    - script: |
+        python3 --version
+        python3 -m venv .venv
+        .venv/bin/python -m pip install --upgrade pip
+        .venv/bin/pip install -r requirements.txt
+      displayName: 'Create venv and install dependencies'
 
 
 #     # --------------------------------------------------------
@@ -113,25 +113,25 @@ stages:
 #     # Docker Build
 #     # --------------------------------------------------------
 
-#     - task: Docker@2
-#       displayName: 'Build Docker image'
-#       inputs:
-#         containerRegistry: 'ado-acr'
-#         repository: '$(imageRepository)'
-#         command: 'build'
-#         Dockerfile: '$(dockerfilePath)'
-#         tags: |
-#           $(imageTag)
+    - task: Docker@2
+      displayName: 'Build Docker image'
+      inputs:
+        containerRegistry: 'ado-acr'
+        repository: '$(imageRepository)'
+        command: 'build'
+        Dockerfile: '$(dockerfilePath)'
+        tags: |
+          $(imageTag)
 
 
 #     # --------------------------------------------------------
 #     # Verify Docker image
 #     # --------------------------------------------------------
 
-#     - script: |
-#         echo "Docker images on agent:"
-#         docker images
-#       displayName: 'Verify Docker image'
+    - script: |
+        echo "Docker images on agent:"
+        docker images
+      displayName: 'Verify Docker image'
 
 
 #     # --------------------------------------------------------
@@ -155,130 +155,15 @@ stages:
 #     # Push image to ACR
 #     # --------------------------------------------------------
 
-#     - task: Docker@2
-#       displayName: 'Push image to ACR'
-#       inputs:
-#         containerRegistry: 'ado-acr'
-#         repository: '$(imageRepository)'
-#         command: 'push'
-#         tags: |
-#           $(imageTag)
+    - task: Docker@2
+      displayName: 'Push image to ACR'
+      inputs:
+        containerRegistry: 'ado-acr'
+        repository: '$(imageRepository)'
+        command: 'push'
+        tags: |
+          $(imageTag)
 
-
-# # ============================================================
-# # CD
-# # ============================================================
-
-# - stage: CD
-#   displayName: 'CD - Deploy to AKS'
-
-#   dependsOn: CI
-#   condition: succeeded()
-
-#   jobs:
-
-#   - deployment: DeployToAKS
-#     displayName: 'Deploy to AKS'
-
-#     environment: 'automobile-ai-dev'
-
-#     pool: z_automobile_app
-
-#     strategy:
-#       runOnce:
-
-#         deploy:
-
-#           steps:
-
-#           # --------------------------------------------------
-#           # Checkout repository
-#           # --------------------------------------------------
-
-#           - checkout: self
-#             displayName: 'Checkout Kubernetes manifests'
-
-
-#           # --------------------------------------------------
-#           # Verify AKS access
-#           # --------------------------------------------------
-
-#           - script: |
-#               kubectl version --client
-#               kubectl get nodes
-#             displayName: 'Verify AKS access'
-
-
-#           # --------------------------------------------------
-#           # Update image tag
-#           # --------------------------------------------------
-
-#           - script: |
-#               echo "Build ID: $(Build.BuildId)"
-#               echo "Image tag: $(imageTag)"
-
-#               sed -i \
-#                 "s|image: .*automobile-ai-agent:.*|image: zautomoilesappregisty.azurecr.io/automobile-ai-agent:$(imageTag)|" \
-#                 k8s/deployment.yaml
-
-#               echo ""
-#               echo "Updated deployment image:"
-#               grep "image:" k8s/deployment.yaml
-
-#             displayName: 'Update image tag'
-
-
-#           # --------------------------------------------------
-#           # Deploy ServiceAccount
-#           # --------------------------------------------------
-
-#           - script: |
-#               kubectl apply -f k8s/serviceaccount.yaml
-
-#             displayName: 'Deploy ServiceAccount'
-
-
-#           # --------------------------------------------------
-#           # Deploy Key Vault SecretProviderClass
-#           # --------------------------------------------------
-
-#           - script: |
-#               kubectl apply -f k8s/secret-provider-class.yaml
-
-#             displayName: 'Deploy Key Vault configuration'
-
-
-#           # --------------------------------------------------
-#           # Deploy Application
-#           # --------------------------------------------------
-
-#           - script: |
-#               kubectl apply -f k8s/deployment.yaml
-
-#             displayName: 'Deploy application'
-
-#           - script: |
-#               echo "Pods:"
-#               kubectl get pods \
-#                 -n automobile-ai \
-#                 -o wide
-
-#               echo ""
-#               echo "Deployment:"
-#               kubectl get deployment automobile-ai-agent \
-#                 -n automobile-ai
-
-#               echo ""
-#               echo "Service:"
-#               kubectl get service \
-#                 -n automobile-ai
-
-#             displayName: 'Verify application'
-
-
-# ============================================================
-# CD - ARGO ROLLOUTS BLUE GREEN
-# ============================================================
 
 # ============================================================
 # CD - ARGO ROLLOUTS BLUE GREEN
