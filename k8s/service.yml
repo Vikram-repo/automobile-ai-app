@@ -10,6 +10,7 @@ spec:
 
   selector:
     app: automobile-ai-agent
+    version: blue
 
   ports:
     - protocol: TCP
