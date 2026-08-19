@@ -280,6 +280,10 @@ stages:
 # CD - ARGO ROLLOUTS BLUE GREEN
 # ============================================================
 
+# ============================================================
+# CD - ARGO ROLLOUTS BLUE GREEN
+# ============================================================
+
 - stage: CD
 
   displayName: 'CD - Argo Rollouts Blue Green'
@@ -306,18 +310,18 @@ stages:
 
           steps:
 
-          # --------------------------------------------------
+          # ==================================================
           # Checkout
-          # --------------------------------------------------
+          # ==================================================
 
           - checkout: self
 
             displayName: 'Checkout Kubernetes manifests'
 
 
-          # --------------------------------------------------
-          # Verify AKS
-          # --------------------------------------------------
+          # ==================================================
+          # Verify AKS + Argo Rollouts
+          # ==================================================
 
           - script: |
 
@@ -327,40 +331,18 @@ stages:
 
               kubectl get nodes
 
-            displayName: 'Verify AKS access'
-
-
-          # --------------------------------------------------
-          # Verify Argo Rollouts
-          # --------------------------------------------------
-
-          - script: |
-
-              set -e
-
-              echo "=== Argo Rollouts CRD ==="
-
               kubectl get crd rollouts.argoproj.io
 
-              echo ""
-
-              echo "=== Argo Rollouts Controller ==="
-
-              kubectl get pods \
-                -n argo-rollouts
-
-              echo ""
-
-              echo "=== Argo Rollouts CLI ==="
+              kubectl get pods -n argo-rollouts
 
               kubectl argo rollouts version
 
-            displayName: 'Verify Argo Rollouts'
+            displayName: 'Verify AKS and Argo Rollouts'
 
 
-          # --------------------------------------------------
-          # Apply Kubernetes resources
-          # --------------------------------------------------
+          # ==================================================
+          # Apply Kubernetes Resources
+          # ==================================================
 
           - script: |
 
@@ -381,12 +363,12 @@ stages:
               kubectl apply \
                 -f k8s/rollout.yaml
 
-            displayName: 'Deploy Argo Rollout'
+            displayName: 'Apply Kubernetes resources'
 
 
-          # --------------------------------------------------
+          # ==================================================
           # Verify Rollout
-          # --------------------------------------------------
+          # ==================================================
 
           - script: |
 
@@ -399,9 +381,9 @@ stages:
             displayName: 'Verify Rollout'
 
 
-          # --------------------------------------------------
-          # Update image
-          # --------------------------------------------------
+          # ==================================================
+          # Deploy New Image
+          # ==================================================
 
           - script: |
 
@@ -417,78 +399,12 @@ stages:
                 automobile-ai-agent="$IMAGE" \
                 -n automobile-ai
 
-            displayName: 'Update Rollout image'
+            displayName: 'Deploy new image'
 
 
-          # --------------------------------------------------
-          # Wait for Preview
-          # --------------------------------------------------
-
-          - script: |
-
-              set -e
-
-              echo "Waiting for Preview ReplicaSet..."
-
-              for i in {1..60}; do
-
-                PREVIEW_SELECTOR=$(kubectl get rollout \
-                  automobile-ai-agent \
-                  -n automobile-ai \
-                  -o jsonpath='{.status.blueGreen.previewSelector}' \
-                  2>/dev/null || true)
-
-                if [ -n "$PREVIEW_SELECTOR" ]; then
-
-                  echo "Preview selector: $PREVIEW_SELECTOR"
-
-                  READY=$(kubectl get pods \
-                    -n automobile-ai \
-                    -l "$PREVIEW_SELECTOR" \
-                    -o jsonpath='{range .items[*]}{.status.containerStatuses[0].ready}{"\n"}{end}' \
-                    2>/dev/null \
-                    | grep -c '^true$' || true)
-
-                  echo "Ready Preview pods: $READY"
-
-                  if [ "$READY" -ge 2 ]; then
-                    echo "Preview pods are Ready."
-                    break
-                  fi
-
-                else
-
-                  echo "Preview selector not available yet."
-
-                fi
-
-                sleep 5
-
-              done
-
-              if [ "$READY" -lt 2 ]; then
-
-                echo "Preview pods did not become Ready."
-
-                kubectl argo rollouts get rollout \
-                  automobile-ai-agent \
-                  -n automobile-ai
-
-                kubectl get pods \
-                  -n automobile-ai \
-                  -l app=automobile-ai-agent \
-                  -o wide
-
-                exit 1
-
-              fi
-
-            displayName: 'Wait for Preview pods'
-
-
-          # --------------------------------------------------
+          # ==================================================
           # Verify Preview
-          # --------------------------------------------------
+          # ==================================================
 
           - script: |
 
@@ -506,24 +422,38 @@ stages:
 
               kubectl get service \
                 automobile-ai-agent-preview \
-                -n automobile-ai \
-                -o yaml
+                -n automobile-ai
 
               echo ""
 
               echo "========== PREVIEW ENDPOINTS =========="
 
-              kubectl get endpoints \
+              ENDPOINTS=$(kubectl get endpoints \
                 automobile-ai-agent-preview \
                 -n automobile-ai \
-                -o wide
+                -o jsonpath='{.subsets[*].addresses[*].ip}')
 
-            displayName: 'Verify Preview service'
+              if [ -z "$ENDPOINTS" ]; then
+
+                echo "ERROR: Preview Service has no endpoints."
+
+                kubectl get pods \
+                  -n automobile-ai \
+                  -l app=automobile-ai-agent \
+                  -o wide
+
+                exit 1
+
+              fi
+
+              echo "Preview endpoints: $ENDPOINTS"
+
+            displayName: 'Verify Preview'
 
 
-          # --------------------------------------------------
+          # ==================================================
           # Preview Smoke Test
-          # --------------------------------------------------
+          # ==================================================
 
           - script: |
 
@@ -544,54 +474,25 @@ stages:
                 --image=curlimages/curl:8.10.1 \
                 --command \
                 -- sh -c '
-
-                  echo "Testing Preview Service..."
-
-                  for i in $(seq 1 10); do
-
-                    echo "Attempt $i"
-
-                    if curl \
-                      --fail \
-                      --silent \
-                      --show-error \
-                      --max-time 10 \
-                      http://automobile-ai-agent-preview:8000/; then
-
-                      echo "Preview smoke test PASSED"
-
-                      exit 0
-
-                    fi
-
-                    sleep 3
-
-                  done
-
-                  echo "Preview smoke test FAILED"
-
-                  exit 1
+                  curl \
+                    --fail \
+                    --silent \
+                    --show-error \
+                    --max-time 15 \
+                    http://automobile-ai-agent-preview:8000/
                 '
-
-              echo "Waiting for smoke-test pod..."
 
               if kubectl wait \
                 --for=jsonpath='{.status.phase}'=Succeeded \
                 pod/"$POD" \
                 -n "$NAMESPACE" \
-                --timeout=120s; then
+                --timeout=60s; then
 
-                echo "Smoke test pod succeeded."
-
-                kubectl logs \
-                  "$POD" \
-                  -n "$NAMESPACE"
+                echo "Preview smoke test PASSED"
 
               else
 
-                echo "Smoke test failed."
-
-                echo "========== POD STATUS =========="
+                echo "Preview smoke test FAILED"
 
                 kubectl get pod "$POD" \
                   -n "$NAMESPACE" \
@@ -599,19 +500,14 @@ stages:
 
                 echo ""
 
-                echo "========== POD DESCRIPTION =========="
-
-                kubectl describe pod "$POD" \
-                  -n "$NAMESPACE"
-
-                echo ""
-
-                echo "========== POD LOGS =========="
-
                 kubectl logs \
                   "$POD" \
                   -n "$NAMESPACE" \
-                  --all-containers=true \
+                  || true
+
+                kubectl describe pod \
+                  "$POD" \
+                  -n "$NAMESPACE" \
                   || true
 
                 exit 1
@@ -625,9 +521,9 @@ stages:
             displayName: 'Smoke test Preview'
 
 
-          # --------------------------------------------------
-          # PROMOTE
-          # --------------------------------------------------
+          # ==================================================
+          # Promote Preview -> Active
+          # ==================================================
 
           - script: |
 
@@ -642,36 +538,32 @@ stages:
             displayName: 'Promote Preview to Active'
 
 
-          # --------------------------------------------------
+          # ==================================================
           # Wait for Promotion
-          # --------------------------------------------------
+          # ==================================================
 
           - script: |
 
               set -e
-
-              echo "Waiting for rollout promotion..."
 
               kubectl argo rollouts status \
                 automobile-ai-agent \
                 -n automobile-ai \
                 --timeout 300s
 
-            displayName: 'Wait for promotion completion'
+            displayName: 'Verify Promotion'
 
 
-          # --------------------------------------------------
+          # ==================================================
           # Final Verification
-          # --------------------------------------------------
+          # ==================================================
 
           - script: |
 
               set -e
 
               echo "=========================================="
-
               echo "FINAL ROLLOUT"
-
               echo "=========================================="
 
               kubectl argo rollouts get rollout \
@@ -681,9 +573,7 @@ stages:
               echo ""
 
               echo "=========================================="
-
               echo "SERVICES"
-
               echo "=========================================="
 
               kubectl get svc \
@@ -692,9 +582,7 @@ stages:
               echo ""
 
               echo "=========================================="
-
               echo "PODS"
-
               echo "=========================================="
 
               kubectl get pods \
@@ -705,9 +593,7 @@ stages:
               echo ""
 
               echo "=========================================="
-
               echo "ACTIVE SERVICE SELECTOR"
-
               echo "=========================================="
 
               kubectl get service \
@@ -722,4 +608,3 @@ stages:
               echo "Blue-Green deployment completed successfully."
 
             displayName: 'Final deployment verification'
-
