@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: automobile-ai-agent-preview
+  namespace: automobile-ai
+
+  labels:
+    app: automobile-ai-agent
+
+spec:
+
+  type: ClusterIP
+
+  ports:
+
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+
+  selector:
+    app: automobile-ai-agent
