@@ -322,28 +322,30 @@ stages:
           - script: |
 
               kubectl version --client
+
               kubectl get nodes
 
             displayName: 'Verify AKS access'
 
 
           # --------------------------------------------------
-          # Verify Argo Rollouts
+          # Verify Argo Rollouts Controller
           # --------------------------------------------------
 
           - script: |
 
-              kubectl argo rollouts version
+              kubectl get crd rollouts.argoproj.io
 
-              kubectl get rollout \
-                automobile-ai-agent \
-                -n automobile-ai
+              kubectl get pods \
+                -n argo-rollouts
+
+              kubectl argo rollouts version
 
             displayName: 'Verify Argo Rollouts'
 
 
           # --------------------------------------------------
-          # Apply supporting resources
+          # Apply Kubernetes resources
           # --------------------------------------------------
 
           - script: |
@@ -360,7 +362,23 @@ stages:
               kubectl apply \
                 -f k8s/preview-service.yaml
 
-            displayName: 'Apply Kubernetes resources'
+              kubectl apply \
+                -f k8s/rollout.yaml
+
+            displayName: 'Deploy Argo Rollout'
+
+
+          # --------------------------------------------------
+          # Verify Rollout
+          # --------------------------------------------------
+
+          - script: |
+
+              kubectl get rollout \
+                automobile-ai-agent \
+                -n automobile-ai
+
+            displayName: 'Verify Rollout'
 
 
           # --------------------------------------------------
