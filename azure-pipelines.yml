@@ -478,7 +478,6 @@ stages:
                 -o wide
 
             displayName: 'Verify Blue Green state'
-
 # --------------------------------------------------
 # Preview smoke test
 # --------------------------------------------------
@@ -487,14 +486,23 @@ stages:
 
               set -e
 
+              POD="automobile-ai-preview-test"
+              NAMESPACE="automobile-ai"
+
               echo "Running Preview smoke test..."
 
-              kubectl run automobile-ai-preview-test \
-                -n automobile-ai \
+              kubectl delete pod "$POD" \
+                -n "$NAMESPACE" \
+                --ignore-not-found=true
+
+              kubectl run "$POD" \
+                -n "$NAMESPACE" \
                 --restart=Never \
                 --image=curlimages/curl:8.10.1 \
                 --command \
                 -- sh -c '
+                  echo "Testing Preview Service..."
+
                   for i in $(seq 1 10); do
 
                     echo "Attempt $i"
@@ -521,21 +529,50 @@ stages:
 
               echo "Waiting for smoke-test pod..."
 
-              kubectl wait \
+              if kubectl wait \
                 --for=jsonpath='{.status.phase}'=Succeeded \
-                pod/automobile-ai-preview-test \
-                -n automobile-ai \
-                --timeout=120s
+                pod/"$POD" \
+                -n "$NAMESPACE" \
+                --timeout=120s; then
 
-              echo "Preview smoke test completed successfully."
+                echo "Smoke test pod succeeded."
 
-              kubectl delete pod \
-                automobile-ai-preview-test \
-                -n automobile-ai \
+                kubectl logs \
+                  "$POD" \
+                  -n "$NAMESPACE"
+
+              else
+
+                echo "Smoke test pod did not succeed."
+
+                echo "========== POD STATUS =========="
+
+                kubectl get pod "$POD" \
+                  -n "$NAMESPACE" \
+                  -o wide
+
+                echo "========== POD DESCRIPTION =========="
+
+                kubectl describe pod "$POD" \
+                  -n "$NAMESPACE"
+
+                echo "========== POD LOGS =========="
+
+                kubectl logs \
+                  "$POD" \
+                  -n "$NAMESPACE" \
+                  --all-containers=true \
+                  || true
+
+                exit 1
+
+              fi
+
+              kubectl delete pod "$POD" \
+                -n "$NAMESPACE" \
                 --ignore-not-found=true
 
             displayName: 'Smoke test Preview'
-
 
           # --------------------------------------------------
           # Wait for promotion
