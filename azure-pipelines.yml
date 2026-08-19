@@ -165,26 +165,141 @@ stages:
           $(imageTag)
 
 
+# # ============================================================
+# # CD
+# # ============================================================
+
+# - stage: CD
+#   displayName: 'CD - Deploy to AKS'
+
+#   dependsOn: CI
+#   condition: succeeded()
+
+#   jobs:
+
+#   - deployment: DeployToAKS
+#     displayName: 'Deploy to AKS'
+
+#     environment: 'automobile-ai-dev'
+
+#     pool: z_automobile_app
+
+#     strategy:
+#       runOnce:
+
+#         deploy:
+
+#           steps:
+
+#           # --------------------------------------------------
+#           # Checkout repository
+#           # --------------------------------------------------
+
+#           - checkout: self
+#             displayName: 'Checkout Kubernetes manifests'
+
+
+#           # --------------------------------------------------
+#           # Verify AKS access
+#           # --------------------------------------------------
+
+#           - script: |
+#               kubectl version --client
+#               kubectl get nodes
+#             displayName: 'Verify AKS access'
+
+
+#           # --------------------------------------------------
+#           # Update image tag
+#           # --------------------------------------------------
+
+#           - script: |
+#               echo "Build ID: $(Build.BuildId)"
+#               echo "Image tag: $(imageTag)"
+
+#               sed -i \
+#                 "s|image: .*automobile-ai-agent:.*|image: zautomoilesappregisty.azurecr.io/automobile-ai-agent:$(imageTag)|" \
+#                 k8s/deployment.yaml
+
+#               echo ""
+#               echo "Updated deployment image:"
+#               grep "image:" k8s/deployment.yaml
+
+#             displayName: 'Update image tag'
+
+
+#           # --------------------------------------------------
+#           # Deploy ServiceAccount
+#           # --------------------------------------------------
+
+#           - script: |
+#               kubectl apply -f k8s/serviceaccount.yaml
+
+#             displayName: 'Deploy ServiceAccount'
+
+
+#           # --------------------------------------------------
+#           # Deploy Key Vault SecretProviderClass
+#           # --------------------------------------------------
+
+#           - script: |
+#               kubectl apply -f k8s/secret-provider-class.yaml
+
+#             displayName: 'Deploy Key Vault configuration'
+
+
+#           # --------------------------------------------------
+#           # Deploy Application
+#           # --------------------------------------------------
+
+#           - script: |
+#               kubectl apply -f k8s/deployment.yaml
+
+#             displayName: 'Deploy application'
+
+#           - script: |
+#               echo "Pods:"
+#               kubectl get pods \
+#                 -n automobile-ai \
+#                 -o wide
+
+#               echo ""
+#               echo "Deployment:"
+#               kubectl get deployment automobile-ai-agent \
+#                 -n automobile-ai
+
+#               echo ""
+#               echo "Service:"
+#               kubectl get service \
+#                 -n automobile-ai
+
+#             displayName: 'Verify application'
+
+
 # ============================================================
-# CD
+# CD - ARGO ROLLOUTS BLUE GREEN
 # ============================================================
 
 - stage: CD
-  displayName: 'CD - Deploy to AKS'
+
+  displayName: 'CD - Argo Rollouts Blue Green'
 
   dependsOn: CI
+
   condition: succeeded()
 
   jobs:
 
-  - deployment: DeployToAKS
-    displayName: 'Deploy to AKS'
+  - deployment: ArgoBlueGreenDeployment
+
+    displayName: 'Deploy to AKS using Argo Rollouts'
 
     environment: 'automobile-ai-dev'
 
     pool: z_automobile_app
 
     strategy:
+
       runOnce:
 
         deploy:
@@ -192,85 +307,141 @@ stages:
           steps:
 
           # --------------------------------------------------
-          # Checkout repository
+          # Checkout
           # --------------------------------------------------
 
           - checkout: self
+
             displayName: 'Checkout Kubernetes manifests'
 
 
           # --------------------------------------------------
-          # Verify AKS access
+          # Verify AKS
           # --------------------------------------------------
 
           - script: |
+
               kubectl version --client
               kubectl get nodes
+
             displayName: 'Verify AKS access'
 
 
           # --------------------------------------------------
-          # Update image tag
+          # Verify Argo Rollouts
           # --------------------------------------------------
 
           - script: |
-              echo "Build ID: $(Build.BuildId)"
-              echo "Image tag: $(imageTag)"
 
-              sed -i \
-                "s|image: .*automobile-ai-agent:.*|image: zautomoilesappregisty.azurecr.io/automobile-ai-agent:$(imageTag)|" \
-                k8s/deployment.yaml
+              kubectl argo rollouts version
+
+              kubectl get rollout \
+                automobile-ai-agent \
+                -n automobile-ai
+
+            displayName: 'Verify Argo Rollouts'
+
+
+          # --------------------------------------------------
+          # Apply supporting resources
+          # --------------------------------------------------
+
+          - script: |
+
+              kubectl apply \
+                -f k8s/serviceaccount.yaml
+
+              kubectl apply \
+                -f k8s/secret-provider-class.yaml
+
+              kubectl apply \
+                -f k8s/active-service.yaml
+
+              kubectl apply \
+                -f k8s/preview-service.yaml
+
+            displayName: 'Apply Kubernetes resources'
+
+
+          # --------------------------------------------------
+          # Update Rollout image
+          # --------------------------------------------------
+
+          - script: |
+
+              echo "Deploying image:"
+              echo "zautomoilesappregisty.azurecr.io/automobile-ai-agent:$(imageTag)"
+
+              kubectl argo rollouts set image \
+                automobile-ai-agent \
+                automobile-ai-agent=zautomoilesappregisty.azurecr.io/automobile-ai-agent:$(imageTag) \
+                -n automobile-ai
+
+            displayName: 'Update Rollout image'
+
+
+          # --------------------------------------------------
+          # Wait for Preview
+          # --------------------------------------------------
+
+          - script: |
+
+              kubectl argo rollouts status \
+                automobile-ai-agent \
+                -n automobile-ai \
+                --timeout 300
+
+            displayName: 'Wait for rollout'
+
+
+          # --------------------------------------------------
+          # Show Rollout
+          # --------------------------------------------------
+
+          - script: |
+
+              kubectl argo rollouts get rollout \
+                automobile-ai-agent \
+                -n automobile-ai
+
+            displayName: 'Verify Preview deployment'
+
+
+          # --------------------------------------------------
+          # Promote
+          # --------------------------------------------------
+
+          - script: |
+
+              kubectl argo rollouts promote \
+                automobile-ai-agent \
+                -n automobile-ai
+
+            displayName: 'Promote new version'
+
+
+          # --------------------------------------------------
+          # Final verification
+          # --------------------------------------------------
+
+          - script: |
+
+              kubectl argo rollouts status \
+                automobile-ai-agent \
+                -n automobile-ai \
+                --timeout 300
 
               echo ""
-              echo "Updated deployment image:"
-              grep "image:" k8s/deployment.yaml
 
-            displayName: 'Update image tag'
+              kubectl argo rollouts get rollout \
+                automobile-ai-agent \
+                -n automobile-ai
 
+              echo ""
 
-          # --------------------------------------------------
-          # Deploy ServiceAccount
-          # --------------------------------------------------
-
-          - script: |
-              kubectl apply -f k8s/serviceaccount.yaml
-
-            displayName: 'Deploy ServiceAccount'
-
-
-          # --------------------------------------------------
-          # Deploy Key Vault SecretProviderClass
-          # --------------------------------------------------
-
-          - script: |
-              kubectl apply -f k8s/secret-provider-class.yaml
-
-            displayName: 'Deploy Key Vault configuration'
-
-
-          # --------------------------------------------------
-          # Deploy Application
-          # --------------------------------------------------
-
-          - script: |
-              kubectl apply -f k8s/deployment.yaml
-
-            displayName: 'Deploy application'
-
-          - script: |
-              echo "Pods:"
               kubectl get pods \
                 -n automobile-ai \
+                -l app=automobile-ai-agent \
                 -o wide
 
-              echo ""
-              echo "Deployment:"
-              kubectl get deployment automobile-ai-agent \
-                -n automobile-ai
-
-              echo ""
-              echo "Service:"
-              kubectl get service \
-                -n automobile-ai
-
-            displayName: 'Verify application'
+            displayName: 'Final rollout verification'
